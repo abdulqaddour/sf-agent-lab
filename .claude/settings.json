@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sf project deploy start --target-org test:*)",
+      "Bash(sf project retrieve start --target-org test:*)",
+      "Bash(sf apex run test --target-org test:*)",
+      "Bash(sf data query --target-org test:*)",
+      "Bash(sf data create record --target-org test:*)",
+      "Bash(sf data update record --target-org test:*)",
+      "Bash(sf data delete record --target-org test:*)",
+      "Bash(sf org list:*)",
+      "Bash(sf org display --target-org test:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git pull:*)",
+      "Bash(git push -u origin SFLAB-:*)",
+      "Bash(git push origin SFLAB-:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)"
+    ],
+    "ask": [
+      "Bash(sf project deploy start --target-org prod:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git merge:*)",
+      "Bash(git push origin main:*)"
+    ],
+    "deny": [
+      "Bash(sf org delete:*)",
+      "Bash(sf org logout:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  }
+}

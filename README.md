@@ -1,58 +1,109 @@
-# Salesforce DX Project
+# sf-agent-lab
 
-Salesforce DX is a development approach that brings source-driven development, team collaboration, and continuous integration to the Salesforce Platform. Instead of working directly in an org through a web browser, you work with metadata as source files in a local DX project, track changes in version control, and deploy through automated processes.
+A hands-on lab for running a Salesforce DevOps pipeline with AI agents.
+Claude Code agents pick up tickets from a Notion board, build the change as Salesforce metadata,
+deploy it to a test org, test it, and promote it to production. Nothing gets built or deployed to prod
+without my sign-off at two human checkpoints.
 
-This project template gets you started with the tools and structure you need to build Salesforce applications using source control, scratch orgs, and the Salesforce CLI.
+**Live ticket board (read-only):** [sf-agent-lab on Notion](https://special-zone-ff2.notion.site/sf-agent-lab-4173f0939ee8817aacc7fb51741f29a1)
 
-## Prerequisites
+---
 
-Before you start, make sure you have:
+## How it works
 
-- **Salesforce CLI** - Download from [developer.salesforce.com/tools/salesforcecli](https://developer.salesforce.com/tools/salesforcecli). See [Install Salesforce CLI](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm) for details.
-- **VS Code with Salesforce Extension Pack** - See [Installation Instructions](https://developer.salesforce.com/docs/platform/sfvscode-extensions/guide/install.html) for details. Includes the Agentforce Vibes extension.
-- **A development org** - Sign up for a free Developer Edition org [here](https://developer.salesforce.com/signup).
-- **Dev Hub enabled** (optional, required to create scratch orgs) - You can enable Dev Hub in your development org under Setup > Dev Hub.  See [Provide Developers Access to Salesforce DX Tools](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_setup_dx_tools.htm).
+```mermaid
+flowchart TD
+    A[To Do / In Draft<br/>Ticket written in Notion] --> B{{Checkpoint 1<br/>I approve the ticket}}
+    B --> C[Ready for Pickup]
+    C --> D[Developer agent<br/>branch, build, deploy to test org]
+    D --> E[QA agent<br/>tests against acceptance criteria]
+    E -- fails --> D
+    E -- passes --> F[Ready for Test<br/>PR opened]
+    F --> G{{Checkpoint 2<br/>I smoke test in the test org}}
+    G -- rejects --> D
+    G -- approves --> H[Ready for Prod]
+    H --> I[Merge to main<br/>deploy to prod org]
+    I --> J[Done]
+```
 
-## Project Structure
+### Ticket stages
 
-Your DX project follows this structure:
+| Status | What happens | Who moves the card here |
+|---|---|---|
+| To Do / In Draft | Ticket is written: user story, acceptance criteria, steps to reproduce (for bugs) | Me, or an agent drafting a ticket |
+| Ready for Pickup | **Checkpoint 1:** I've reviewed and approved the ticket | **Me only** |
+| In Progress (Build & Test) | Developer agent builds on a branch and deploys to test; QA agent tests; they loop until QA passes (max 3 attempts, then I'm flagged) | Developer agent |
+| Ready for Test | QA passed and a pull request is open; waiting on my smoke test | Developer agent |
+| Ready for Prod | **Checkpoint 2:** I smoke-tested and approved for production | **Me only** |
+| Done | PR merged to `main`, `main` deployed to prod | Agent, after a successful deploy |
 
-- **`force-app/main/default/`** - Your metadata source files live in this default package directory. You can configure additional package directories in the `sfdx-project.json` file.
-- **`config/`** - Scratch org definitions and project settings
-- **`scripts/`** - Automation scripts for common tasks
-- **`sfdx-project.json`** - Project manifest that defines package directories, namespace, API version, and other project-level settings
+---
 
-See [Salesforce DX Project Configuration](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_ws_config.htm).
+## The pieces
 
-## Get Started
+| Piece | Role |
+|---|---|
+| **Notion** | Ticket board: the source of truth for what to build and where each ticket stands |
+| **Claude Code** | Runs the agents on my machine, inside this project folder |
+| **Salesforce CLI (`sf`)** | How the agents work in Salesforce: deploy, retrieve, run tests, query data |
+| **Git + GitHub** | Version history for the metadata and the agent setup; one branch per ticket, `main` = prod |
+| **Two Salesforce orgs** | `test` (all building and testing) and `prod` (only approved changes), both free Developer Edition orgs |
 
-Ready to start developing? The [Get Started with Salesforce DX](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_get_started_dx.htm) guide walks you through your first project, from creating a scratch org to creating a simple Apex class or LWC to deploying your code to a sandbox.
+### The agents
 
-## Common Salesforce CLI Commands
+- **Developer agent** ([`.claude/agents/developer.md`](.claude/agents/developer.md)) builds the ticket as metadata on a `SFLAB-<id>` branch, deploys to the test org, fixes what QA finds, and opens the pull request.
+- **QA agent** ([`.claude/agents/qa.md`](.claude/agents/qa.md)) is kept separate so the code isn't grading itself. It tests the change in the test org against each acceptance criterion and records Pass/Fail on the ticket. It doesn't edit or deploy anything.
+- **`/run-ticket`** ([`.claude/commands/run-ticket.md`](.claude/commands/run-ticket.md)) is the one command I run. It reads the card's status and does the next step.
 
-Here are common CLI commands that you'll use the most:
+---
 
-- `sf org login web`: Authorize an org
-- `sf org open`: Open your org in a browser
-- `sf org create scratch`: Create a scratch org
-- `sf project deploy start`: Deploy metadata to your org
-- `sf project retrieve start`: Retrieve metadata from your org
-- `sf template generate <artifact>`: Scaffold new components, such as Apex classes and triggers, LWC components, Lightning apps, and more
-- `sf apex <command>`: Run Apex tests, run anonymous Apex blocks, and view logs
-- `sf data <command>`: Work with test data
-- `sf alias <command>`: Manage org aliases
-- `sf config <command>`: Configure CLI settings
+## Guardrails
 
-## Use Agentforce Vibes to Build Lightning Apps
+The human checkpoints are enforced two ways:
 
-Transform your ideas into custom Lightning apps that extend CRM workflows directly in Lightning Experience. Through natural conversations with Agentforce Vibes, implement custom objects and fields, complex business logic, and dynamic UI components. See [Build a Lightning App Using Agentforce Vibes](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/lexapp-overview.html).
+1. **Rules** ([`CLAUDE.md`](CLAUDE.md)): agents may never move a card into Ready for Pickup or Ready for Prod, never start a ticket that isn't approved, and never deploy to prod unless the card is in Ready for Prod.
+2. **Permissions** ([`.claude/settings.json`](.claude/settings.json)): test-org commands and branch pushes run freely, any prod deploy or merge to `main` always stops for my approval, and deleting orgs or force-pushing is blocked.
 
-## Additional Resources
+---
 
-- [Agentforce Vibes Developer Guide](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/einstein-overview.html)
-- [Salesforce CLI Installation Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_intro.htm)
-- [Salesforce DX Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/)
-- [Salesforce CLI Command Reference](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/)
-- [Salesforce CLI Plugin Development Guide](https://developer.salesforce.com/docs/platform/salesforce-cli-plugin/guide/conceptual-overview.html)
-- [Salesforce VS Code Extensions Documentation](https://developer.salesforce.com/tools/vscode/)
+## Repo layout
 
+```
+sf-agent-lab/
+├── CLAUDE.md                    shared rules every agent follows
+├── .claude/
+│   ├── agents/
+│   │   ├── developer.md         developer agent
+│   │   └── qa.md                QA agent
+│   ├── commands/
+│   │   └── run-ticket.md        /run-ticket command
+│   └── settings.json            what agents may do without asking
+├── force-app/main/default/      Salesforce metadata (fields, flows, Apex, permission sets)
+└── sfdx-project.json            Salesforce DX project config
+```
+
+---
+
+## Running it
+
+```bash
+# one-time: log the Salesforce CLI into both orgs
+sf org login web --alias test
+sf org login web --alias prod
+sf config set target-org test
+
+# then, in Claude Code opened in this folder
+/run-ticket SFLAB-<id>
+```
+
+---
+
+## Progress log
+
+- **Setup:** two Developer Edition orgs, Salesforce CLI, git, and GitHub connected; Salesforce DX project created.
+- **First manual round trip:** built a `Renewal_Date__c` field on Opportunity in test, retrieved it into the repo,
+  committed it, and deployed it to prod with the CLI, the same loop the agents automate.
+- **Ticket board:** Notion kanban with six stages and fields for user story, acceptance criteria,
+  steps to reproduce, QA results, git branch, and PR.
+- **Agents:** shared rules, developer and QA agents, `/run-ticket`, and permission guardrails.
+- **Next:** run the first ticket end to end through the agents.
